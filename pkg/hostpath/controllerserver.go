@@ -41,6 +41,14 @@ type controllerServer struct {
 }
 
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	glog.Info("Received CreateVolume")
+	glog.Info(req)
+	glog.Info(ctx)
+
+	if req != nil {
+		return nil, status.Errorf(codes.OutOfRange, "Error")
+	}
+
 	if err := cs.Driver.ValidateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		glog.V(3).Infof("invalid create volume req: %v", req)
 		return nil, err

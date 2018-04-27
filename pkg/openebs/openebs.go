@@ -32,12 +32,10 @@ type openEbs struct {
 
 	cap   []*csi.VolumeCapability_AccessMode
 	cscap []*csi.ControllerServiceCapability
-
-
 }
 
 const (
-	driverName = "openebs"
+	driverName = "csi-openebs"
 )
 
 var (

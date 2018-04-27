@@ -35,7 +35,13 @@ type nodeServer struct {
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	glog.Info("Received NodePublishVolume")
+	glog.Info(req)
+	glog.Info(ctx)
 
+	if req != nil {
+		return nil, status.Errorf(codes.OutOfRange, "Error")
+	}
 	// Check arguments
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")

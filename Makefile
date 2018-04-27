@@ -15,9 +15,9 @@
 REGISTRY_NAME = quay.io/k8scsi
 IMAGE_VERSION = canary
 
-.PHONY: all flexadapter nfs hostpath iscsi cinder clean hostpath-container
+.PHONY: all flexadapter nfs hostpath iscsi cinder openebs clean hostpath-container openebs-container
 
-all: flexadapter nfs hostpath iscsi cinder
+all: flexadapter nfs hostpath iscsi cinder openebs
 
 test:
 	go test github.com/kubernetes-csi/drivers/pkg/... -cover
@@ -39,6 +39,11 @@ iscsi:
 cinder:
 	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o _output/cinderplugin ./app/cinderplugin
+openebs:
+	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
+	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o _output/openebsplugin ./app/openebsplugin
+openebs-container: openebs
+	docker build -t $(REGISTRY_NAME)/openebsplugin:$(IMAGE_VERSION) -f ./app/openebsplugin/Dockerfile .
 clean:
 	go clean -r -x
 	-rm -rf _output
