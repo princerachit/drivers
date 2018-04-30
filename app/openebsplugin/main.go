@@ -27,7 +27,7 @@ func init() {
 }
 
 var (
-	endpoint   = flag.String("endpoint", "tcp://127.0.0.1:10000", "CSI endpoint")
+	endpoint   = flag.String("endpoint", "unix:///csi/csi.sock", "CSI endpoint")
 	nodeID     = flag.String("nodeid", "CSINode", "node id")
 )
 

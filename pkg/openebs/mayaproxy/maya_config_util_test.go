@@ -53,7 +53,7 @@ func TestGetVolumeURL(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	expectedVolumeUrl := mayaConfig.mapiURI.String() + "/" + "latest/volumes"
+	expectedVolumeUrl := mayaConfig.mapiURI.String() + "/" + "latest/volumes/"
 
 	if obtainedUrl.String() != expectedVolumeUrl {
 		t.Errorf("Expected %s got %s", expectedVolumeUrl, obtainedUrl.String())

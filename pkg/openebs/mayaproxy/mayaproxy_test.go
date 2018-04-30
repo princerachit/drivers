@@ -16,7 +16,7 @@ func (k8sClient *K8sClientMock) getK8sClient() (*kubernetes.Clientset, error) {
 }
 
 func (k8sClient *K8sClientMock) getSvcObject(client *kubernetes.Clientset, namespace string) (*v1.Service, error) {
-	return &v1.Service{Spec: v1.ServiceSpec{ClusterIP: "10.20.20.30"}}, nil
+	return &v1.Service{Spec: v1.ServiceSpec{ClusterIP: "10.20.20.30", Ports: []v1.ServicePort{{Port: 5656, Name: "api"}}}}, nil
 }
 
 func TestSetupMayaConfig(t *testing.T) {

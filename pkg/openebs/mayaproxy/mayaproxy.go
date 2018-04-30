@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/api/core/v1"
 	"github.com/pkg/errors"
+	"fmt"
 )
 
 type MayaApiService interface {
@@ -58,7 +59,7 @@ func (k8sClient K8sClient) getK8sClient() (*kubernetes.Clientset, error) {
 }
 
 func (k8sClient K8sClient) getSvcObject(client *kubernetes.Clientset, namespace string) (*v1.Service, error) {
-	return client.CoreV1().Services(namespace).Get("maya-apiserver-service", metav1.GetOptions{})
+	return client.CoreV1().Services(namespace).Get(mayaApiServerService, metav1.GetOptions{})
 }
 
 /*
@@ -85,13 +86,16 @@ func (mayaConfig *MayaConfig) SetupMayaConfig(k8sClient K8sClientService) error 
 		return errors.New("Error creating kubernetes clientset")
 	}
 
-	mapiUrl, err := url.Parse(svc.Spec.ClusterIP)
+	// Remove the hardcoding of port index
+	mapiUrl, err := url.Parse("http://" + svc.Spec.ClusterIP + ":" + fmt.Sprintf("%d", svc.Spec.Ports[0].Port))
+	glog.V(2).Infof("Maya apiserver spec %v", svc)
 	if err != nil {
 		glog.Errorf("Could not parse maya-apiserver server url: %v", err)
 		return err
 	}
 	mayaConfig.mapiURI = *mapiUrl
 	glog.V(2).Infof("Maya Cluster IP: %v", mayaConfig.mapiURI)
+	glog.V(2).Infof("Host: %v Scheme: %v Path: %v", mayaConfig.mapiURI.Host, mayaConfig.mapiURI.Scheme, mayaConfig.mapiURI.Path)
 	return nil
 }
 
@@ -103,9 +107,10 @@ func (mayaConfig MayaConfig) ProxyCreateVolume(spec mayav1.VolumeSpec) error {
 	// Marshal serializes the value provided into a YAML document
 	yamlValue, _ := yaml.Marshal(spec)
 
-	glog.V(2).Infof("[DEBUG] volume Spec Created:\n%v\n", string(yamlValue))
+	glog.V(4).Infof("[DEBUG] volume Spec Created:\n%v\n", string(yamlValue))
 
 	url, err := mayaConfig.GetVolumeURL(versionLatest)
+	glog.V(4).Infof("[DEBUG] create volume URL %v", url.String())
 	if err != nil {
 		return err
 	}
@@ -128,7 +133,6 @@ func (mayaConfig MayaConfig) ProxyCreateVolume(spec mayav1.VolumeSpec) error {
 		glog.Errorf("Unable to read response from maya-apiserver %v", err)
 		return err
 	}
-
 	code := resp.StatusCode
 	if code != http.StatusOK {
 		glog.Errorf("Error response from maya-apiserver: %v", http.StatusText(code))
@@ -165,7 +169,7 @@ func (mayaConfig MayaConfig) ProxyDeleteVolume(volumeName string) error {
 		glog.Errorf("HTTP Status error from maya-apiserver: %v\n", http.StatusText(code))
 		return err
 	}
-	glog.Info("volume Deleted Successfully initiated")
+	glog.Info("volume Deletion Successfully initiated")
 	return nil
 }
 
@@ -174,11 +178,12 @@ func (mayaConfig MayaConfig) ProxyListVolume(volumeName string) (*mayav1.Volume,
 
 	glog.V(2).Infof("[DEBUG] Get details for Volume :%v", string(volumeName))
 
-	url, err := mayaConfig.GetVolumeURL(versionLatest)
+	url, err := mayaConfig.GetVolumeInfoURL(versionLatest, volumeName)
 	if err != nil {
 		return nil, err
 	}
 
+	glog.V(2).Infof("[DEBUG] Requesting for volume details at %s", url.String())
 	req, err := http.NewRequest("GET", url.String(), nil)
 	c := &http.Client{
 		Timeout: timeout,
@@ -193,12 +198,12 @@ func (mayaConfig MayaConfig) ProxyListVolume(volumeName string) (*mayav1.Volume,
 	code := resp.StatusCode
 	if code != http.StatusOK {
 		glog.Errorf("HTTP Status error from maya-apiserver: %v\n", http.StatusText(code))
-		return nil, err
+		return nil, errors.New("HTTP Status error from maya-apiserver: " + http.StatusText(code))
 	}
-	glog.V(2).Info("volume Details Successfully Retrieved")
 
 	// Fill the obtained json into volume
-	json.NewDecoder(resp.Body).Decode(volume)
+	json.NewDecoder(resp.Body).Decode(&volume)
+	glog.V(2).Infof("volume Details Successfully Retrieved %v", volume)
 
 	return &volume, nil
 }

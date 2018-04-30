@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/golang/glog"
 )
 
 type nodeServer struct {
@@ -30,6 +31,7 @@ type nodeServer struct {
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	glog.Infof("Node Publish volume")
 	iscsiInfo, err := getISCSIInfo(req)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())

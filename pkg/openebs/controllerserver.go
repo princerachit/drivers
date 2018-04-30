@@ -72,30 +72,30 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// check if volume already exists
 	volume, err = mayaConfig.ProxyListVolume(req.GetName())
 	if err != nil {
-		// REVIEW THIS. Do we need to return error here or return the value.
-		return nil, status.Error(codes.AlreadyExists, fmt.Sprintf("Volume with the same name: %s but with different size already exist", req.GetName()))
-	}
-	
+		// Convert from bytes to GigaBytes
+		volSize := int64(req.GetCapacityRange().GetRequiredBytes() / 1e9)
+		volumeSpec.Metadata.Labels.Storage = string(volSize)
 
-	// Convert from bytes to GigaBytes
-	volSize := int64(req.GetCapacityRange().GetRequiredBytes() / 1e9)
-	volumeSpec.Metadata.Labels.Storage = string(volSize)
+		volumeSpec.Metadata.Labels.StorageClass = req.Parameters["storage-class-name"]
+		volumeSpec.Metadata.Name = req.Name
+		volumeSpec.Metadata.Labels.Namespace = "default"
 
-	volumeSpec.Metadata.Labels.StorageClass = req.Parameters["storage-class-name"]
-	volumeSpec.Metadata.Name = req.Name
-	volumeSpec.Metadata.Labels.Namespace = "default"
+		// Issue a request to Maya API Server to create a volume
+		glog.Info("Attempting to create volume")
+		err = mayaConfig.ProxyCreateVolume(volumeSpec)
 
-	// Issue a request to Maya API Server to create a volume
-	err = mayaConfig.ProxyCreateVolume(volumeSpec)
-
-	if err != nil {
-		return nil, status.Error(codes.Unavailable, fmt.Sprint(err))
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, fmt.Sprint(err))
+		}
 	}
 
 	volume, err = mayaConfig.ProxyListVolume(req.Name)
 	if err != nil {
-		return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("Volume with the same name: %s but with different size already exist", req.GetName()))
+		return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("Unable to contact amapi server: %v", err))
 	}
+
+	glog.V(2).Infof("[DEBUG] Volume details %s", volume)
+	glog.V(2).Infof("[DEBUG] Volume metadata %v", volume.Metadata)
 
 	// extract iscsi volume details
 	var iqn, targetPortal string
@@ -121,6 +121,24 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 }
 
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	glog.Infof("Received request: %v", req)
+	if err := cs.Driver.ValidateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
+		glog.V(3).Infof("invalid create volume req: %v", req)
+		return nil, err
+	}
+
+	mayaConfig := &mayaproxy.MayaConfig{}
+	err := mayaConfig.SetupMayaConfig(mayaproxy.K8sClient{})
+	if err != nil {
+		glog.Errorf("Error setting up MayaConfig")
+		return nil, status.Error(codes.Unavailable, fmt.Sprint(err))
+	}
+
+	err = mayaConfig.ProxyDeleteVolume(req.VolumeId)
+	if err != nil {
+
+	}
+
 	return &csi.DeleteVolumeResponse{}, nil
 }
 

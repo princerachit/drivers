@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	// maya api server host path constants
-	volumes = "/volumes"
-	delete  = "/delete"
-	info    = "/info"
-
 	// maya api server versions
-	versionLatest = "/latest"
+	versionLatest = "latest"
+
+	// maya api server host path constants
+	volumes = "volumes"
+	delete  = "delete"
+	info    = "info"
 
 	// mapi service name
 	mayaApiServerService = "maya-apiserver-service"
@@ -52,10 +52,14 @@ func (mayaConfig MayaConfig) GetVolumeURL(version string) (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
+	scheme := mayaConfig.mapiURI.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
 	return &url.URL{
-		Scheme: mayaConfig.mapiURI.Scheme,
+		Scheme: scheme,
 		Host:   mayaConfig.mapiURI.Host,
-		Path:   version + volumes,
+		Path:   "/" + version + "/" + volumes + "/",
 	}, nil
 }
 
