@@ -74,7 +74,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if err != nil {
 		// Convert from bytes to GigaBytes
 		volSize := int64(req.GetCapacityRange().GetRequiredBytes() / 1e9)
-		volumeSpec.Metadata.Labels.Storage = string(volSize)
+		volumeSpec.Metadata.Labels.Storage = fmt.Sprintf("%dG", volSize)
 
 		volumeSpec.Metadata.Labels.StorageClass = req.Parameters["storage-class-name"]
 		volumeSpec.Metadata.Name = req.Name
@@ -98,18 +98,19 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	glog.V(2).Infof("[DEBUG] Volume metadata %v", volume.Metadata)
 
 	// extract iscsi volume details
-	var iqn, targetPortal string
-
+	var iqn, targetPortal, portals string
 	for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
 		switch key {
 		case "vsm.openebs.io/iqn":
 			iqn = value.(string)
 		case "vsm.openebs.io/targetportals":
 			targetPortal = value.(string)
+		case "openebs.io/jiva-target-portal":
+			portals = value.(string)
 		}
 	}
 
-	attributes := map[string]string{"iqn": iqn, "targetPortal": targetPortal, "lun": "0"}
+	attributes := map[string]string{"iqn": iqn, "targetPortal": targetPortal, "lun": "0", "portals": portals, "iscsiInterface": "default"}
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{

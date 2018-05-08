@@ -45,7 +45,7 @@ func getISCSIInfo(req *csi.NodePublishVolumeRequest) (*iscsiDisk, error) {
 
 	portals := []string{}
 	if err := json.Unmarshal([]byte(portalList), &portals); err != nil {
-		//return nil, err
+	//	return nil, err
 	}
 
 	for _, portal := range portals {

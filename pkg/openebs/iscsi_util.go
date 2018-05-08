@@ -169,6 +169,7 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 	var iscsiTransport string
 	var lastErr error
 
+	glog.Info("cmd: ", " iscsiadm ", " -m ", " iface ", " -I ", b.Iface, " -o ", " show ")
 	out, err := b.exec.Run("iscsiadm", "-m", "iface", "-I", b.Iface, "-o", "show")
 	if err != nil {
 		glog.Errorf("iscsi: could not read iface %s error: %s", b.Iface, string(out))
@@ -195,6 +196,7 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 	for _, tp := range bkpPortal {
 		// Rescan sessions to discover newly mapped LUNs. Do not specify the interface when rescanning
 		// to avoid establishing additional sessions to the same target.
+		glog.Info("cmd: ", "iscsiadm ", " -m ", " node ", " -p ", tp, " -T ", b.Iqn, " -R ")
 		out, err := b.exec.Run("iscsiadm", "-m", "node", "-p", tp, "-T", b.Iqn, "-R")
 		if err != nil {
 			glog.Errorf("iscsi: failed to rescan session with error: %s (%v)", string(out), err)
@@ -216,6 +218,7 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 			continue
 		}
 		// build discoverydb and discover iscsi target
+		glog.Info("cmd: ", " iscsiadm ", " -m ", " discoverydb ", " -t ", " sendtargets ", " -p ", tp, " -I ", b.Iface, " -o ", " new ")
 		b.exec.Run("iscsiadm", "-m", "discoverydb", "-t", "sendtargets", "-p", tp, "-I", b.Iface, "-o", "new")
 		// update discoverydb with CHAP secret
 		err = updateISCSIDiscoverydb(b, tp)
@@ -223,9 +226,11 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 			lastErr = fmt.Errorf("iscsi: failed to update discoverydb to portal %s error: %v", tp, err)
 			continue
 		}
+		glog.Info("cmd: ", " iscsiadm ", "-m", " discoverydb ", " -t ", " sendtargets ", " -p ", tp, " -I ", b.Iface, " --discover ")
 		out, err = b.exec.Run("iscsiadm", "-m", "discoverydb", "-t", "sendtargets", "-p", tp, "-I", b.Iface, "--discover")
 		if err != nil {
 			// delete discoverydb record
+			glog.Info("cmd: ", " iscsiadm ", " -m ", " discoverydb ", " -t ", " sendtargets ", " -p ", tp, " -I ", b.Iface, " -o ", " delete ")
 			b.exec.Run("iscsiadm", "-m", "discoverydb", "-t", "sendtargets", "-p", tp, "-I", b.Iface, "-o", "delete")
 			lastErr = fmt.Errorf("iscsi: failed to sendtargets to portal %s output: %s, err %v", tp, string(out), err)
 			continue
@@ -237,9 +242,11 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 			continue
 		}
 		// login to iscsi target
+		glog.Info("cmd: ", " iscsiadm ", " -m ", " node ", " -p ", tp, " -T ", b.Iqn, " -I ", b.Iface, " --login ")
 		out, err = b.exec.Run("iscsiadm", "-m", "node", "-p", tp, "-T", b.Iqn, "-I", b.Iface, "--login")
 		if err != nil {
 			// delete the node record from database
+			glog.Info("cmd: ", " iscsiadm ", " -m ", " node ", " -p ", tp, " -I ", b.Iface, " -T ", b.Iqn, " -o ", " delete ")
 			b.exec.Run("iscsiadm", "-m", "node", "-p", tp, "-I", b.Iface, "-T", b.Iqn, "-o", "delete")
 			lastErr = fmt.Errorf("iscsi: failed to attach disk: Error: %s (%v)", string(out), err)
 			continue
@@ -256,6 +263,7 @@ func (util *ISCSIUtil) AttachDisk(b iscsiDiskMounter) (string, error) {
 
 	if len(devicePaths) == 0 {
 		// delete cloned iface
+		glog.Info("cmd: ", " iscsiadm ", " -m ", " iface ", " -I ", b.Iface, " -o ", " delete ")
 		b.exec.Run("iscsiadm", "-m", "iface", "-I", b.Iface, "-o", "delete")
 		glog.Errorf("iscsi: failed to get any path for iscsi disk, last err seen:\n%v", lastErr)
 		return "", fmt.Errorf("failed to get any path for iscsi disk, last err seen:\n%v", lastErr)
