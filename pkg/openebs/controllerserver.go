@@ -45,6 +45,39 @@ func checkArguments(req *csi.CreateVolumeRequest) error {
 	return nil
 }
 
+// getVolumeAttributes iterates over volume's annotation and returns a map of attributes
+func getVolumeAttributes(volume *mayav1.Volume) (map[string]string) {
+	var iqn, targetPortal, portals string
+	for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
+		switch key {
+		case "vsm.openebs.io/iqn":
+			iqn = value.(string)
+		case "vsm.openebs.io/targetportals":
+			targetPortal = value.(string)
+		case "openebs.io/jiva-target-portal":
+			portals = value.(string)
+		}
+	}
+
+	// values hardcoded below. Do they need fix?
+	attributes := map[string]string{"iqn": iqn, "targetPortal": targetPortal, "lun": "0", "portals": portals, "iscsiInterface": "default"}
+	return attributes
+}
+
+// createVolumeSpec returns a volume spec created from the req object
+func createVolumeSpec(req *csi.CreateVolumeRequest) (mayav1.VolumeSpec) {
+	volumeSpec := mayav1.VolumeSpec{}
+
+	// Convert Bytes to Gigabyte
+	volSize := int64(req.GetCapacityRange().GetRequiredBytes() / 1e9)
+	volumeSpec.Metadata.Labels.Storage = fmt.Sprintf("%dG", volSize)
+	volumeSpec.Metadata.Labels.StorageClass = req.Parameters["storage-class-name"]
+	volumeSpec.Metadata.Name = req.Name
+	volumeSpec.Metadata.Labels.Namespace = "default"
+
+	return volumeSpec
+}
+
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	glog.Infof("Received request: %v", req)
 
@@ -59,7 +92,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, err
 	}
 
-	mayaConfig := &mayaproxy.MayaConfig{}
+	mayaConfig := mayaproxy.GetNewMayaConfig()
 	err = mayaConfig.SetupMayaConfig(mayaproxy.K8sClient{})
 	if err != nil {
 		glog.Errorf("Error setting up MayaConfig")
@@ -67,29 +100,21 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	var volume *mayav1.Volume
-	volumeSpec := mayav1.VolumeSpec{}
 
-	// check if volume already exists
-	volume, err = mayaConfig.ProxyListVolume(req.GetName())
+	// If volume retrieval fails then create the volume
+	volume, err = mayaConfig.ListVolume(req.GetName())
 	if err != nil {
-		// Convert from bytes to GigaBytes
-		volSize := int64(req.GetCapacityRange().GetRequiredBytes() / 1e9)
-		volumeSpec.Metadata.Labels.Storage = fmt.Sprintf("%dG", volSize)
+		volumeSpec := createVolumeSpec(req)
 
-		volumeSpec.Metadata.Labels.StorageClass = req.Parameters["storage-class-name"]
-		volumeSpec.Metadata.Name = req.Name
-		volumeSpec.Metadata.Labels.Namespace = "default"
-
-		// Issue a request to Maya API Server to create a volume
 		glog.Info("Attempting to create volume")
-		err = mayaConfig.ProxyCreateVolume(volumeSpec)
+		err = mayaConfig.CreateVolume(volumeSpec)
 
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, fmt.Sprint(err))
 		}
 	}
 
-	volume, err = mayaConfig.ProxyListVolume(req.Name)
+	volume, err = mayaConfig.ListVolume(req.Name)
 	if err != nil {
 		return nil, status.Error(codes.DeadlineExceeded, fmt.Sprintf("Unable to contact amapi server: %v", err))
 	}
@@ -97,20 +122,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	glog.V(2).Infof("[DEBUG] Volume details %s", volume)
 	glog.V(2).Infof("[DEBUG] Volume metadata %v", volume.Metadata)
 
-	// extract iscsi volume details
-	var iqn, targetPortal, portals string
-	for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
-		switch key {
-		case "vsm.openebs.io/iqn":
-			iqn = value.(string)
-		case "vsm.openebs.io/targetportals":
-			targetPortal = value.(string)
-		case "openebs.io/jiva-target-portal":
-			portals = value.(string)
-		}
-	}
-
-	attributes := map[string]string{"iqn": iqn, "targetPortal": targetPortal, "lun": "0", "portals": portals, "iscsiInterface": "default"}
+	attributes := getVolumeAttributes(volume)
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -128,16 +140,16 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, err
 	}
 
-	mayaConfig := &mayaproxy.MayaConfig{}
+	mayaConfig := mayaproxy.GetNewMayaConfig()
 	err := mayaConfig.SetupMayaConfig(mayaproxy.K8sClient{})
 	if err != nil {
 		glog.Errorf("Error setting up MayaConfig")
 		return nil, status.Error(codes.Unavailable, fmt.Sprint(err))
 	}
 
-	err = mayaConfig.ProxyDeleteVolume(req.VolumeId)
+	err = mayaConfig.DeleteVolume(req.VolumeId)
 	if err != nil {
-
+		// TODO: Handle volume delete error
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
