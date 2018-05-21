@@ -43,6 +43,11 @@ iscsi:
 cinder:
 	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o _output/cinderplugin ./app/cinderplugin
+openebs:
+	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
+	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o _output/openebsplugin ./app/openebsplugin
+openebs-container: openebs
+	docker build -t $(REGISTRY_NAME)/openebsplugin:$(IMAGE_VERSION) -f ./app/openebsplugin/Dockerfile .
 clean:
 	go clean -r -x
 	-rm -rf _output
